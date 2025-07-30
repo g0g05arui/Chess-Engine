@@ -202,18 +202,23 @@ func BoardAfterMove(m Move, board Board) Board {
 	}
 
 	for _, piece := range board.PiecesSlice {
-		// Skip piece at destination (captured piece)
+		// Skip captured piece
 		if piece.Pos.Column == m.To.Column && piece.Pos.Line == m.To.Line {
 			continue
 		}
 
-		// Update piece if it's the one being moved
+		// Update the moved piece
 		if piece.Pos.Column == m.From.Column && piece.Pos.Line == m.From.Line {
 			piece.Pos = m.To
 			piece.hasMoved = true
+
+			// Check for promotion
+			if piece.pType == Pawn && (m.To.Line == 8 || m.To.Line == 1) {
+				piece.pType = Queen // Always promote to Queen
+			}
 		}
 
-		// Add piece to updated slice and matrix
+		// Add updated piece
 		updatedPieces = append(updatedPieces, piece)
 		updatedMatrix[piece.Pos.Line][piece.Pos.Column] = piece
 	}
@@ -224,6 +229,7 @@ func BoardAfterMove(m Move, board Board) Board {
 		WhiteTurn:    !board.WhiteTurn,
 	}
 }
+
 func Perft(board Board, depth int, color PieceColor) int {
 	if depth == 0 {
 		return 1
