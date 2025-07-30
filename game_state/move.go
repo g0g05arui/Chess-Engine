@@ -25,7 +25,7 @@ func IsLegal(piece Piece, m Move, board Board) bool {
 
 	newBoard := BoardAfterMove(m, board)
 
-	if IsKingInCheck(newBoard, PieceColor(int8(WhiteColor)+utils.BoolToInt8(!board.whiteTurn))) {
+	if IsKingInCheck(newBoard, PieceColor(int8(WhiteColor)+utils.BoolToInt8(!board.WhiteTurn))) {
 		return false
 	}
 
@@ -221,7 +221,7 @@ func BoardAfterMove(m Move, board Board) Board {
 	return Board{
 		PiecesSlice:  updatedPieces,
 		PiecesMatrix: updatedMatrix,
-		whiteTurn:    !board.whiteTurn,
+		WhiteTurn:    !board.WhiteTurn,
 	}
 }
 func Perft(board Board, depth int, color PieceColor) int {

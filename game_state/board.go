@@ -5,7 +5,7 @@ import "strings"
 type Board = struct {
 	PiecesSlice  []Piece
 	PiecesMatrix [9][9]Piece
-	whiteTurn    bool
+	WhiteTurn    bool
 }
 
 func CreateBoard() Board {
@@ -70,7 +70,7 @@ func CreateBoard() Board {
 	return Board{
 		PiecesSlice:  pieces,
 		PiecesMatrix: matrix,
-		whiteTurn:    true,
+		WhiteTurn:    true,
 	}
 }
 
@@ -95,4 +95,68 @@ func BoardToString(board Board) string {
 	}
 
 	return sb.String()
+}
+
+func BoardToFEN(board Board) string {
+	var sb strings.Builder
+
+	for rank := int8(8); rank >= 1; rank-- {
+		emptyCount := 0
+		for file := int8(1); file <= 8; file++ {
+			p := board.PiecesMatrix[rank][file]
+			if p.pType == 0 {
+				emptyCount++
+			} else {
+				if emptyCount > 0 {
+					sb.WriteString(string('0' + emptyCount))
+					emptyCount = 0
+				}
+				sb.WriteString(PieceToFENChar(p))
+			}
+		}
+		if emptyCount > 0 {
+			sb.WriteString(string('0' + emptyCount))
+		}
+		if rank > 1 {
+			sb.WriteString("/")
+		}
+	}
+
+	// Active color
+	if board.WhiteTurn {
+		sb.WriteString(" w")
+	} else {
+		sb.WriteString(" b")
+	}
+
+	// Default values for castling, en passant, halfmove clock, and fullmove number
+	sb.WriteString(" - - 0 1")
+
+	return sb.String()
+}
+
+func PieceToFENChar(p Piece) string {
+	var ch byte
+	switch p.pType {
+	case Pawn:
+		ch = 'p'
+	case Knight:
+		ch = 'n'
+	case Bishop:
+		ch = 'b'
+	case Rook:
+		ch = 'r'
+	case Queen:
+		ch = 'q'
+	case King:
+		ch = 'k'
+	default:
+		return ""
+	}
+
+	if p.Color == WhiteColor {
+		ch -= 32 // convert to uppercase
+	}
+
+	return string(ch)
 }

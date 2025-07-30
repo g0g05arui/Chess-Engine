@@ -8,6 +8,13 @@ import (
 
 func main() {
 	board := engine.CreateBoard()
-	m, score := engine.BestMove(board, 5, engine.WhiteColor)
-	fmt.Printf("Best move: %v → %v  (score %d cp)\n", m.From, m.To, score)
+	for i := 1; i <= 10; i++ {
+		color := engine.WhiteColor
+		if !board.WhiteTurn {
+			color = engine.BlackColor
+		}
+		m, _ := engine.BestMove(board, 6, color)
+		board = engine.BoardAfterMove(m, board)
+		fmt.Println(engine.BoardToFEN(board))
+	}
 }
