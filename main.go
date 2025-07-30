@@ -8,6 +8,6 @@ import (
 
 func main() {
 	board := engine.CreateBoard()
-	nodes := engine.Perft(board, 5, engine.WhiteColor)
-	fmt.Println("Total positions at depth 4:", nodes)
+	m, score := engine.BestMove(board, 5, engine.WhiteColor)
+	fmt.Printf("Best move: %v → %v  (score %d cp)\n", m.From, m.To, score)
 }
