@@ -160,3 +160,73 @@ func PieceToFENChar(p Piece) string {
 
 	return string(ch)
 }
+
+func FENToBoard(fen string) Board {
+	fields := strings.Fields(fen)
+	if len(fields) < 2 {
+		panic("invalid FEN string")
+	}
+
+	board := Board{
+		PiecesSlice:  []Piece{},
+		PiecesMatrix: [9][9]Piece{},
+		WhiteTurn:    fields[1] == "w",
+	}
+
+	ranks := strings.Split(fields[0], "/")
+	if len(ranks) != 8 {
+		panic("invalid piece placement in FEN")
+	}
+
+	for rank := 8; rank >= 1; rank-- {
+		line := ranks[8-rank]
+		file := int8(1)
+		for i := 0; i < len(line); i++ {
+			ch := line[i]
+			if ch >= '1' && ch <= '8' {
+				file += int8(ch - '0')
+				continue
+			}
+
+			var color PieceColor
+			var pType PieceType
+
+			if ch >= 'A' && ch <= 'Z' {
+				color = WhiteColor
+				ch += 32 // convert to lowercase
+			} else {
+				color = BlackColor
+			}
+
+			switch ch {
+			case 'p':
+				pType = Pawn
+			case 'n':
+				pType = Knight
+			case 'b':
+				pType = Bishop
+			case 'r':
+				pType = Rook
+			case 'q':
+				pType = Queen
+			case 'k':
+				pType = King
+			default:
+				panic("invalid piece character in FEN")
+			}
+
+			p := Piece{
+				pType:    pType,
+				Color:    color,
+				Pos:      Position{Line: int8(rank), Column: file},
+				hasMoved: true,
+			}
+
+			board.PiecesSlice = append(board.PiecesSlice, p)
+			board.PiecesMatrix[rank][file] = p
+			file++
+		}
+	}
+
+	return board
+}

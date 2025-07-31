@@ -3,12 +3,16 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 
-	engine "github.com/g0g05arui/chess-engine/game_state"
+	"github.com/g0g05arui/chess-engine/computed"
+	"github.com/g0g05arui/chess-engine/game_state"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func fetchAndSaveImageAsync(fen string, moveNumber int, wg *sync.WaitGroup) {
@@ -42,31 +46,85 @@ func fetchAndSaveImageAsync(fen string, moveNumber int, wg *sync.WaitGroup) {
 }
 
 func main() {
-	// Ensure the output directory exists
-	if err := os.MkdirAll("game_status", os.ModePerm); err != nil {
-		fmt.Printf("Failed to create game_status directory: %v\n", err)
-		return
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
 	}
+	PORT := os.Getenv("PORT")
 
-	board := engine.CreateBoard()
-	var wg sync.WaitGroup
-
-	for i := 1; i <= 100; i++ {
-		color := engine.WhiteColor
-		if !board.WhiteTurn {
-			color = engine.BlackColor
+	r := gin.Default()
+	r.GET("/best-move", func(c *gin.Context) {
+		fen := c.DefaultQuery("fen", "")
+		turn := c.DefaultQuery("turn", "white")
+		if fen == "" {
+			c.Status(400)
+			return
 		}
 
-		m, _ := engine.BestMove(board, 5, color)
-		board = engine.BoardAfterMove(m, board)
+		color := game_state.WhiteColor
+		if turn != "white" {
+			color = game_state.BlackColor
+		}
+		board := game_state.FENToBoard(fen)
+		cacheKey := computed.CacheKey{Fen: fen, WhiteTurn: turn == "white"}
 
-		fen := engine.BoardToFEN(board)
-		fmt.Println(fen)
+		const defaultDepth = 4
 
-		wg.Add(1)
-		go fetchAndSaveImageAsync(fen, i, &wg)
-	}
+		// Start with default cached result
+		move, ok := computed.Cache[cacheKey]
+		currentDepth := defaultDepth
+		if !ok {
+			move, _ = game_state.BestMove(board, defaultDepth, color)
+			computed.Cache[cacheKey] = move
+		}
 
-	wg.Wait()
-	fmt.Println("All images downloaded.")
+		// Search for the deepest available result in DeepCache
+		for d := defaultDepth + 1; d <= defaultDepth+3; d++ { // Look ahead up to 3 levels
+			deepKey := computed.DeepCacheKey{Fen: fen, WhiteTurn: turn == "white", Depth: d}
+			if val, exists := computed.DeepCache[deepKey]; exists {
+				move = val.BestMove
+				currentDepth = val.Depth
+			}
+		}
+
+		// Return the best available move
+		c.JSON(200, gin.H{
+			"best_move": move,
+			"depth":     currentDepth,
+		})
+
+		// Launch next-depth search if not already present
+		go func(fen string, turn string, board game_state.Board, currentDepth int) {
+			color := game_state.WhiteColor
+			if turn != "white" {
+				color = game_state.BlackColor
+			}
+			nextDepth := currentDepth + 1
+			deepKey := computed.DeepCacheKey{Fen: fen, WhiteTurn: turn == "white", Depth: nextDepth}
+
+			// If already in DeepCache, don't compute
+			if _, exists := computed.DeepCache[deepKey]; exists {
+				return
+			}
+
+			// If already computing, don't start again
+			if _, alreadyComputing := computed.InProgress.LoadOrStore(deepKey, struct{}{}); alreadyComputing {
+				return
+			}
+
+			// Defer removing from in-progress after we're done
+			defer computed.InProgress.Delete(deepKey)
+
+			fmt.Printf("Computing deeper best move for depth %d...\n", nextDepth)
+			move, _ := game_state.BestMove(board, nextDepth, color)
+			computed.DeepCache[deepKey] = computed.DeepCacheValue{
+				BestMove: move,
+				Depth:    nextDepth,
+			}
+		}(fen, turn, board, currentDepth)
+
+	})
+
+	r.Run(":" + PORT)
 }
