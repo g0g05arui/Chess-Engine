@@ -1,8 +1,8 @@
-// -------- search.go ----------
 package game_state
 
 import (
 	"math"
+	"sort"
 	"sync"
 )
 
@@ -14,8 +14,8 @@ func BestMove(board Board, depth int, color PieceColor) (best Move, bestScore in
 		score int
 	}
 
-	jobs := make(chan Move, 100)      // Moves to evaluate
-	results := make(chan result, 100) // Scored results
+	jobs := make(chan Move, 100)
+	results := make(chan result, 100)
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
@@ -36,9 +36,8 @@ func BestMove(board Board, depth int, color PieceColor) (best Move, bestScore in
 		if piece.Color != color {
 			continue
 		}
-		for _, to := range GenerateAllLegalMoves(piece, board) {
-			mv := Move{From: piece.Pos, To: to}
-			jobs <- mv
+		for _, to := range orderedMovesByEval(color, board, piece) {
+			jobs <- to
 		}
 	}
 	close(jobs)
@@ -68,14 +67,13 @@ func alphaBeta(board Board, depth int, alpha, beta int, color PieceColor) int {
 		if piece.Color != color {
 			continue
 		}
-		for _, to := range GenerateAllLegalMoves(piece, board) {
-			mv := Move{From: piece.Pos, To: to}
+		for _, mv := range orderedMovesByEval(color, board, piece) {
 			child := BoardAfterMove(mv, board)
 			score := -alphaBeta(child, depth-1, -beta, -alpha, opposite(color))
 			if score > alpha {
 				alpha = score
 				if alpha >= beta {
-					return alpha // β‑cutoff
+					return alpha
 				}
 			}
 		}
@@ -88,4 +86,32 @@ func opposite(c PieceColor) PieceColor {
 		return BlackColor
 	}
 	return WhiteColor
+}
+
+func orderedMovesByEval(color PieceColor, board Board, piece Piece) []Move {
+	moves := GenerateAllLegalMoves(piece, board)
+	scored := make([]struct {
+		move  Move
+		score int
+	}, len(moves))
+
+	for i, to := range moves {
+		mv := Move{From: piece.Pos, To: to}
+		child := BoardAfterMove(mv, board)
+		eval := Evaluate(child, color)
+		scored[i] = struct {
+			move  Move
+			score int
+		}{mv, eval}
+	}
+
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
+	})
+
+	ordered := make([]Move, len(moves))
+	for i, s := range scored {
+		ordered[i] = s.move
+	}
+	return ordered
 }

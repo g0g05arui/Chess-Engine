@@ -1,8 +1,6 @@
 package game_state
 
 import (
-	"fmt"
-
 	"github.com/g0g05arui/chess-engine/utils"
 )
 
@@ -244,7 +242,6 @@ func Perft(board Board, depth int, color PieceColor) int {
 		for _, to := range moves {
 			move := Move{From: piece.Pos, To: to}
 			newBoard := BoardAfterMove(move, board)
-			fmt.Println(BoardToString(newBoard))
 			nextColor := BlackColor
 			if color == BlackColor {
 				nextColor = WhiteColor

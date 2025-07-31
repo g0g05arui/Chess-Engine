@@ -54,6 +54,7 @@ func main() {
 	PORT := os.Getenv("PORT")
 
 	r := gin.Default()
+
 	r.GET("/best-move", func(c *gin.Context) {
 		fen := c.DefaultQuery("fen", "")
 		turn := c.DefaultQuery("turn", "white")
