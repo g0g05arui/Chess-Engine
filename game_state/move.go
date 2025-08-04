@@ -37,7 +37,7 @@ func _Find_Piece_By_Pos(pos Position, board Board) (Piece, bool) {
 
 	piece := board.PiecesMatrix[pos.Line][pos.Column]
 
-	if piece.pType == 0 || (piece.Pos.Column == 0 && piece.Pos.Line == 0) {
+	if piece.Type == 0 || (piece.Pos.Column == 0 && piece.Pos.Line == 0) {
 		return Piece{}, false
 	}
 
@@ -49,7 +49,7 @@ func IsKingInCheck(board Board, color PieceColor) bool {
 	var king Piece
 	found := false
 	for _, p := range board.PiecesSlice {
-		if p.pType == King && p.Color == color {
+		if p.Type == King && p.Color == color {
 			king = p
 			found = true
 			break
@@ -81,7 +81,7 @@ func GenerateAllVisiblePositions(piece Piece, board Board) []Position {
 	var positions []Position
 
 	getDirections := func() []struct{ dc, dl int8 } {
-		switch piece.pType {
+		switch piece.Type {
 		case Rook:
 			return []struct{ dc, dl int8 }{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 		case Bishop:
@@ -108,7 +108,7 @@ func GenerateAllVisiblePositions(piece Piece, board Board) []Position {
 		}
 	}
 
-	switch piece.pType {
+	switch piece.Type {
 	case Pawn:
 		var dir int8 = 1
 		startLine := 2
@@ -211,8 +211,8 @@ func BoardAfterMove(m Move, board Board) Board {
 			piece.hasMoved = true
 
 			// Check for promotion
-			if piece.pType == Pawn && (m.To.Line == 8 || m.To.Line == 1) {
-				piece.pType = Queen // Always promote to Queen
+			if piece.Type == Pawn && (m.To.Line == 8 || m.To.Line == 1) {
+				piece.Type = Queen // Always promote to Queen
 			}
 		}
 

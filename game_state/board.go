@@ -25,7 +25,7 @@ func CreateBoard() Board {
 	for i := int8(1); i <= 8; i++ {
 		// White pawns
 		pawn := Piece{
-			pType:    Pawn,
+			Type:     Pawn,
 			Color:    WhiteColor,
 			Pos:      Position{Line: 2, Column: i},
 			hasMoved: false,
@@ -35,7 +35,7 @@ func CreateBoard() Board {
 
 		// White back rank
 		backPiece := Piece{
-			pType:    backRank[i-1],
+			Type:     backRank[i-1],
 			Color:    WhiteColor,
 			Pos:      Position{Line: 1, Column: i},
 			hasMoved: false,
@@ -48,7 +48,7 @@ func CreateBoard() Board {
 	for i := int8(1); i <= 8; i++ {
 		// Black pawns
 		pawn := Piece{
-			pType:    Pawn,
+			Type:     Pawn,
 			Color:    BlackColor,
 			Pos:      Position{Line: 7, Column: i},
 			hasMoved: false,
@@ -58,7 +58,7 @@ func CreateBoard() Board {
 
 		// Black back rank
 		backPiece := Piece{
-			pType:    backRank[i-1],
+			Type:     backRank[i-1],
 			Color:    BlackColor,
 			Pos:      Position{Line: 8, Column: i},
 			hasMoved: false,
@@ -104,7 +104,7 @@ func BoardToFEN(board Board) string {
 		emptyCount := 0
 		for file := int8(1); file <= 8; file++ {
 			p := board.PiecesMatrix[rank][file]
-			if p.pType == 0 {
+			if p.Type == 0 {
 				emptyCount++
 			} else {
 				if emptyCount > 0 {
@@ -137,7 +137,7 @@ func BoardToFEN(board Board) string {
 
 func PieceToFENChar(p Piece) string {
 	var ch byte
-	switch p.pType {
+	switch p.Type {
 	case Pawn:
 		ch = 'p'
 	case Knight:
@@ -216,7 +216,7 @@ func FENToBoard(fen string) Board {
 			}
 
 			p := Piece{
-				pType:    pType,
+				Type:     pType,
 				Color:    color,
 				Pos:      Position{Line: int8(rank), Column: file},
 				hasMoved: true,

@@ -27,12 +27,12 @@ const (
 type Piece = struct {
 	Pos      Position
 	Color    PieceColor
-	pType    PieceType
+	Type     PieceType
 	hasMoved bool
 }
 
 func _uncolored_PieceToString(piece Piece) string {
-	switch piece.pType {
+	switch piece.Type {
 	case Pawn:
 		return "P"
 	case King:
