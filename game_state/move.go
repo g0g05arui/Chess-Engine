@@ -175,19 +175,6 @@ func GenerateAllVisiblePositions(piece Piece, board Board) []Position {
 	return positions
 }
 
-func GenerateAllLegalMoves(piece Piece, board Board) []Position {
-	visiblePositions := GenerateAllVisiblePositions(piece, board)
-	var legalMoves []Position
-
-	for _, pos := range visiblePositions {
-		if IsLegal(piece, Move{From: piece.Pos, To: pos}, board) {
-			legalMoves = append(legalMoves, pos)
-		}
-	}
-
-	return legalMoves
-}
-
 func BoardAfterMove(m Move, board Board) Board {
 	var updatedPieces []Piece
 	var updatedMatrix [9][9]Piece
@@ -221,11 +208,37 @@ func BoardAfterMove(m Move, board Board) Board {
 		updatedMatrix[piece.Pos.Line][piece.Pos.Column] = piece
 	}
 
-	return Board{
+	// Create new board with updated turn
+	newBoard := Board{
 		PiecesSlice:  updatedPieces,
 		PiecesMatrix: updatedMatrix,
 		WhiteTurn:    !board.WhiteTurn,
+		Played:       make(map[string]int),
 	}
+
+	// Copy the Played map from the original board
+	for fen, count := range board.Played {
+		newBoard.Played[fen] = count
+	}
+
+	// Generate FEN for the new position and update the counter
+	newFEN := BoardToFEN(newBoard)
+	newBoard.Played[newFEN]++
+
+	return newBoard
+}
+
+func GenerateAllLegalMoves(piece Piece, board Board) []Position {
+	visiblePositions := GenerateAllVisiblePositions(piece, board)
+	var legalMoves []Position
+
+	for _, pos := range visiblePositions {
+		if IsLegal(piece, Move{From: piece.Pos, To: pos}, board) {
+			legalMoves = append(legalMoves, pos)
+		}
+	}
+
+	return legalMoves
 }
 
 func Perft(board Board, depth int, color PieceColor) int {

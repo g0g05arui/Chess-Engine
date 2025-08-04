@@ -6,6 +6,7 @@ type Board = struct {
 	PiecesSlice  []Piece
 	PiecesMatrix [9][9]Piece
 	WhiteTurn    bool
+	Played       map[string]int //fen counter
 }
 
 func CreateBoard() Board {

@@ -10,6 +10,12 @@ var pieceValue = map[PieceType]int{
 }
 
 func Evaluate(board Board, sideToMove PieceColor) int {
+	// Check for threefold repetition (position played twice already)
+	fen := BoardToFEN(board)
+	if count, exists := board.Played[fen]; exists && count >= 2 {
+		return 0
+	}
+
 	score := 0
 	const CENTER_VALUE_MULTIPLIER float32 = 0.05
 	const ATTACK_VISIBILITY_MULTIPLIER int = 15 // percent-based scaling
