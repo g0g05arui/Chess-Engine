@@ -10,6 +10,8 @@ import (
 
 	"gioui.org/app"
 	"gioui.org/f32"
+	"gioui.org/io/event"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -33,6 +35,13 @@ var depthSlider widget.Float
 var selectedDepth int = 4
 var moveStartTime time.Time
 var isCalculatingMove bool = false
+
+// Game mode variables
+var botVsBotMode bool = false
+var botVsBotCheckbox widget.Bool
+var selectedSquare *engine.Position = nil
+var validMoves []engine.Move
+var boardTag struct{}
 
 // UI elements
 var startButton widget.Clickable
@@ -80,18 +89,23 @@ func main() {
 	app.Main()
 }
 
-func checkGameEnd(board engine.Board) (bool, string) {
-	// Check for threefold repetition
-	fen := engine.BoardToFEN(board)
-	if count, exists := board.Played[fen]; exists && count >= 3 {
+func checkGameEnd(b engine.Board, turn engine.PieceColor) (bool, string) {
+	// three-fold repetition
+	fen := engine.BoardToFEN(b)
+	if c, ok := b.Played[fen]; ok && c >= 3 {
 		return true, "Draw by threefold repetition"
 	}
 
-	// You can add other endgame conditions here:
-	// - Checkmate detection
-	// - Stalemate detection
-	// - Fifty-move rule
-	// - Insufficient material
+	inCheck := engine.IsKingInCheck(b, turn)
+	if !engine.HasLegalMoves(b, turn) {
+		if inCheck {
+			if turn == engine.WhiteColor {
+				return true, "Checkmate – Black wins"
+			}
+			return true, "Checkmate – White wins"
+		}
+		return true, "Draw by stalemate"
+	}
 
 	return false, ""
 }
@@ -103,64 +117,141 @@ func resetGame() {
 	board = engine.CreateBoard()
 	colorTurn = engine.WhiteColor
 	isCalculatingMove = false
+	selectedSquare = nil
+	validMoves = nil
+}
+
+func getSquareFromPosition(x, y int, boardSize int) *engine.Position {
+	squareSize := boardSize / 8
+	file := x / squareSize
+	rank := y / squareSize
+
+	if file >= 0 && file < 8 && rank >= 0 && rank < 8 {
+		// Convert screen coordinates to chess coordinates
+		chessFile := file + 1 // Convert 0-7 to 1-8
+		chessRank := 8 - rank // Convert 0-7 to 8-1 (flip vertically)
+		return &engine.Position{Column: int8(chessFile), Line: int8(chessRank)}
+	}
+	return nil
+}
+
+func isValidMove(from, to engine.Position, moves []engine.Move) *engine.Move {
+	for _, move := range moves {
+		if move.From.Column == from.Column && move.From.Line == from.Line &&
+			move.To.Column == to.Column && move.To.Line == to.Line {
+			return &move
+		}
+	}
+	return nil
 }
 
 func run(w *app.Window) error {
 	var ops op.Ops
+
+	// local copy of the game board and whose turn it is
 	board := engine.CreateBoard()
+	turn := engine.WhiteColor
 
-	w.Option(app.Size(600, 600), app.MaxSize(600, 600), app.MinSize(600, 600))
-
-	color := engine.WhiteColor
+	// fixed 600×600 window
+	w.Option(
+		app.Size(600, 600),
+		app.MaxSize(600, 600),
+		app.MinSize(600, 600),
+	)
 
 	for {
 		switch e := w.Event().(type) {
+
 		case app.DestroyEvent:
 			return e.Err
+
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
 
+			// ─── MAIN GAME STATE ────────────────────────────────────────────────
 			if gameStarted && !gameEnded {
-				drawChessBoard(gtx, board)
 
-				// Check for game end conditions
-				if ended, reason := checkGameEnd(board); ended {
+				drawChessBoard(gtx, board) // also registers event.Op for boardTag
+
+				if ended, reason := checkGameEnd(board, colorTurn); ended {
 					gameEnded = true
 					gameEndReason = reason
-					fmt.Println("Game ended:", reason)
-				} else if !isCalculatingMove {
-					// Start calculating the move
-					isCalculatingMove = true
-					moveStartTime = time.Now()
 
-					go func() {
-						move, _ := engine.BestMove(board, selectedDepth, color)
+				} else if botVsBotMode || turn == engine.BlackColor {
 
-						// Ensure at least 1 second has passed
-						elapsed := time.Since(moveStartTime)
-						if elapsed < time.Second {
-							time.Sleep(time.Second - elapsed)
+					if !isCalculatingMove {
+						isCalculatingMove = true
+						moveStartTime = time.Now()
+
+						go func(b engine.Board, c engine.PieceColor) {
+							mv, _ := engine.BestMove(b, selectedDepth, c)
+
+							// ensure at least 1 s thinking time for smoother UX
+							if d := time.Since(moveStartTime); d < time.Second {
+								time.Sleep(time.Second - d)
+							}
+
+							board = engine.BoardAfterMove(mv, board)
+							if turn == engine.WhiteColor {
+								turn = engine.BlackColor
+							} else {
+								turn = engine.WhiteColor
+							}
+							colorTurn = turn
+							isCalculatingMove = false
+							w.Invalidate()
+						}(board, turn)
+					}
+
+					// ---------- human move (human is White) -------------------------
+				} else {
+					for {
+						ev, ok := gtx.Event(pointer.Filter{
+							Target: &boardTag,
+							Kinds:  pointer.Press,
+						})
+						if !ok {
+							break // no more events this frame
 						}
+						if pe, ok := ev.(pointer.Event); ok && pe.Kind == pointer.Press {
+							boardSize := gtx.Constraints.Max.X
+							clicked := getSquareFromPosition(int(pe.Position.X), int(pe.Position.Y), boardSize)
+							if clicked == nil {
+								continue
+							}
 
-						// Apply the move
-						board = engine.BoardAfterMove(move, board)
-						if color == engine.WhiteColor {
-							color = engine.BlackColor
-						} else {
-							color = engine.WhiteColor
+							if selectedSquare == nil {
+								// first click – select a White piece
+								piece := board.PiecesMatrix[clicked.Line][clicked.Column]
+								if piece.Type != 0 && piece.Color == engine.WhiteColor {
+									selectedSquare = clicked
+									positions := engine.GenerateAllLegalMoves(piece, board)
+									validMoves = validMoves[:0]
+									for _, p := range positions {
+										validMoves = append(validMoves, engine.Move{From: *selectedSquare, To: p})
+									}
+								}
+							} else {
+								// second click – try to make a legal move
+								if mv := isValidMove(*selectedSquare, *clicked, validMoves); mv != nil {
+									board = engine.BoardAfterMove(*mv, board)
+									turn = engine.BlackColor
+									colorTurn = turn
+								}
+								selectedSquare = nil
+								validMoves = nil
+							}
 						}
-						fmt.Println(move)
-
-						isCalculatingMove = false
-						w.Invalidate()
-					}()
+					}
 				}
 
 				e.Frame(gtx.Ops)
 				w.Invalidate()
+
 			} else if gameEnded {
 				drawGameEndScreen(gtx, w)
 				e.Frame(gtx.Ops)
+
 			} else {
 				draw_menu(gtx, w)
 				e.Frame(gtx.Ops)
@@ -226,10 +317,20 @@ func drawGameEndScreen(gtx layout.Context, w *app.Window) {
 
 func drawChessBoard(gtx layout.Context, board engine.Board) {
 	boardSize := gtx.Constraints.Max.X
+
+	//  ❱❱  INPUT REGISTRATION  ❰❰
+	area := clip.Rect(image.Rect(0, 0, boardSize, boardSize)).Push(gtx.Ops)
+	event.Op(gtx.Ops, &boardTag) // declare tag for input routing
+	area.Pop()
+
 	squareSize := boardSize / 8
 	pieceDrawSize := int(float32(squareSize) * 0.9)
 	lightColor := color.NRGBA{R: 240, G: 217, B: 181, A: 255}
 	darkColor := color.NRGBA{R: 181, G: 136, B: 99, A: 255}
+	selectedColor := color.NRGBA{R: 255, G: 255, B: 0, A: 100} // Yellow highlight
+	validMoveColor := color.NRGBA{R: 0, G: 255, B: 0, A: 100}  // Green highlight
+
+	// Register for pointer events
 
 	for rank := 0; rank < 8; rank++ {
 		for file := 0; file < 8; file++ {
@@ -241,11 +342,30 @@ func drawChessBoard(gtx layout.Context, board engine.Board) {
 				Max: image.Point{x + squareSize, y + squareSize},
 			}.Push(gtx.Ops)
 
-			color := lightColor
+			// Determine square color
+			squareColor := lightColor
 			if (rank+file)%2 == 1 {
-				color = darkColor
+				squareColor = darkColor
 			}
-			paint.Fill(gtx.Ops, color)
+
+			// Check if this square should be highlighted
+			chessFile := file + 1
+			chessRank := 8 - rank
+
+			// Highlight selected square
+			if selectedSquare != nil && int(selectedSquare.Column) == chessFile && int(selectedSquare.Line) == chessRank {
+				squareColor = selectedColor
+			}
+
+			// Highlight valid move squares
+			for _, move := range validMoves {
+				if int(move.To.Column) == chessFile && int(move.To.Line) == chessRank {
+					squareColor = validMoveColor
+					break
+				}
+			}
+
+			paint.Fill(gtx.Ops, squareColor)
 			square.Pop()
 
 			// Draw piece if exists
@@ -342,7 +462,42 @@ func draw_menu(gtx layout.Context, w *app.Window) {
 			}),
 			// Spacing
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Spacer{Height: unit.Dp(40)}.Layout(gtx)
+				return layout.Spacer{Height: unit.Dp(30)}.Layout(gtx)
+			}),
+			// Game mode checkbox
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{
+					Axis:      layout.Horizontal,
+					Alignment: layout.Middle,
+				}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						checkbox := material.CheckBox(theme, &botVsBotCheckbox, "Bot vs Bot")
+						checkbox.Color = color.NRGBA{R: 70, G: 130, B: 180, A: 255}
+
+						// Update bot vs bot mode based on checkbox
+						botVsBotMode = botVsBotCheckbox.Value
+
+						return checkbox.Layout(gtx)
+					}),
+				)
+			}),
+			// Mode description
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				var modeText string
+				if botVsBotMode {
+					modeText = "Watch two AI players compete"
+				} else {
+					modeText = "Play as White against the AI"
+				}
+
+				desc := material.Caption(theme, modeText)
+				desc.Alignment = text.Middle
+				desc.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+				return desc.Layout(gtx)
+			}),
+			// Spacing
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Spacer{Height: unit.Dp(30)}.Layout(gtx)
 			}),
 			// Depth selector label
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {

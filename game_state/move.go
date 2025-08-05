@@ -264,3 +264,24 @@ func Perft(board Board, depth int, color PieceColor) int {
 	}
 	return count
 }
+
+func HasLegalMoves(b Board, color PieceColor) bool {
+	for r := int8(1); r <= 8; r++ {
+		for f := int8(1); f <= 8; f++ {
+			p := b.PiecesMatrix[r][f]
+			if p.Color != color || p.Type == 0 {
+				continue
+			}
+			// generate moves for this piece
+			for _, dst := range GenerateAllLegalMoves(p, b) {
+				mv := Move{From: Position{Line: r, Column: f}, To: dst}
+				next := BoardAfterMove(mv, b)
+				// discard pseudo-legal moves that leave own king in check
+				if !IsKingInCheck(next, color) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
