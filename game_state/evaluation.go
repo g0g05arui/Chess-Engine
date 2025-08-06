@@ -9,7 +9,24 @@ var pieceValue = map[PieceType]int{
 	King:   0,
 }
 
+const (
+	INF = 100000 // High value for checkmate, but not so high it causes overflow
+)
+
 func Evaluate(board Board, sideToMove PieceColor) int {
+	// Check for checkmate or stalemate
+	hasLegalMoves := HasLegalMoves(board, sideToMove)
+	if !hasLegalMoves {
+		if IsKingInCheck(board, sideToMove) {
+			// Checkmate - return INF or -INF depending on who is mated
+			if sideToMove == WhiteColor {
+				return -INF
+			}
+			return INF
+		}
+		return 0 // Stalemate
+	}
+
 	// Check for threefold repetition (position played twice already)
 	fen := BoardToFEN(board)
 	if count, exists := board.Played[fen]; exists && count >= 2 {

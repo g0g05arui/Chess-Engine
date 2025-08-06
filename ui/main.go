@@ -111,14 +111,23 @@ func checkGameEnd(b engine.Board, turn engine.PieceColor) (bool, string) {
 }
 
 func resetGame() {
+	// Reset game flags
 	gameStarted = false
 	gameEnded = false
 	gameEndReason = ""
+	isCalculatingMove = false
+
+	// Reset board and turn state
 	board = engine.CreateBoard()
 	colorTurn = engine.WhiteColor
-	isCalculatingMove = false
+	//color = engine.WhiteColor
+
+	// Reset UI state
 	selectedSquare = nil
 	validMoves = nil
+
+	// Reset game counters in the board
+	board.Played = make(map[string]int)
 }
 
 func getSquareFromPosition(x, y int, boardSize int) *engine.Position {
@@ -149,7 +158,7 @@ func run(w *app.Window) error {
 	var ops op.Ops
 
 	// local copy of the game board and whose turn it is
-	board := engine.CreateBoard()
+	board = engine.CreateBoard()
 	turn := engine.WhiteColor
 
 	// fixed 600×600 window
@@ -187,7 +196,7 @@ func run(w *app.Window) error {
 							mv, _ := engine.BestMove(b, selectedDepth, c)
 
 							// ensure at least 1 s thinking time for smoother UX
-							if d := time.Since(moveStartTime); d < time.Second {
+							if d := time.Since(moveStartTime); d < time.Millisecond {
 								time.Sleep(time.Second - d)
 							}
 
@@ -249,7 +258,8 @@ func run(w *app.Window) error {
 				w.Invalidate()
 
 			} else if gameEnded {
-				drawGameEndScreen(gtx, w)
+				drawChessBoard(gtx, board)
+				drawGameEndOverlay(gtx, w)
 				e.Frame(gtx.Ops)
 
 			} else {
@@ -260,14 +270,15 @@ func run(w *app.Window) error {
 	}
 }
 
-func drawGameEndScreen(gtx layout.Context, w *app.Window) {
+func drawGameEndOverlay(gtx layout.Context, w *app.Window) {
 	// Initialize theme if not already done
 	if theme == nil {
 		initTheme()
 	}
 
-	// Fill background with light gray
-	paint.Fill(gtx.Ops, color.NRGBA{R: 240, G: 240, B: 240, A: 255})
+	// Draw semi-transparent overlay
+	paint.ColorOp{Color: color.NRGBA{A: 180}}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
 
 	// Center the content
 	layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -280,6 +291,7 @@ func drawGameEndScreen(gtx layout.Context, w *app.Window) {
 				title := material.H1(theme, "Game Over")
 				title.Alignment = text.Middle
 				title.Color = color.NRGBA{R: 180, G: 50, B: 50, A: 255}
+				title.Font.Weight = 400
 				return title.Layout(gtx)
 			}),
 			// Spacing
@@ -299,14 +311,16 @@ func drawGameEndScreen(gtx layout.Context, w *app.Window) {
 			}),
 			// New Game button
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				btn := material.Button(theme, &newGameButton, "New Game")
+				btn := material.Button(theme, &newGameButton, "Continue")
 				btn.CornerRadius = unit.Dp(8)
 				btn.Background = color.NRGBA{R: 70, G: 130, B: 180, A: 255}
 
 				// Check if button was clicked
 				if newGameButton.Clicked(gtx) {
 					resetGame()
+					gameStarted = false // Force return to menu
 					w.Invalidate()
+					fmt.Println("HERE")
 				}
 
 				return btn.Layout(gtx)

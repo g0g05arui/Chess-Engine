@@ -33,6 +33,9 @@ func fetchAndSaveImageAsync(fen string, moveNumber int, wg *sync.WaitGroup) {
 
 	filePath := filepath.Join("game_status", fmt.Sprintf("%d.png", moveNumber))
 	out, err := os.Create(filePath)
+
+
+
 	if err != nil {
 		fmt.Printf("Move %d: failed to create file: %v\n", moveNumber, err)
 		return
